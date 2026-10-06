@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "releases": [
+    {
+      "type": "ASIGNATURA",
+      "version": 1,
+      "changes": []
+    },
+    {
+      "type": "MODULO",
+      "version": 1,
+      "changes": []
+    }
+  ]
+}
