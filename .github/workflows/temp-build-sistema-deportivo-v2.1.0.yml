@@ -1,0 +1,44 @@
+name: TEMP Build SISTEMA DEPORTIVO v2.1.0
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout isolated build branch
+        uses: actions/checkout@v4
+        with:
+          ref: build-sistema-deportivo-v2-1-0
+
+      - name: Rebuild source package
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem "build-sistema-deportivo-v2.1.0/source.part*" | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes("source.zip", [Convert]::FromBase64String($b64))
+          Expand-Archive -Path "source.zip" -DestinationPath "." -Force
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: sistema-deportivo-v2.1.0
+        run: npm install
+
+      - name: Build installer and portable
+        working-directory: sistema-deportivo-v2.1.0
+        run: npm run dist
+
+      - name: Upload installer and portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SISTEMA_DEPORTIVO_Windows_v2.1.0
+          path: sistema-deportivo-v2.1.0/dist/*.exe
+          if-no-files-found: error
