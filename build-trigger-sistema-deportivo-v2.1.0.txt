@@ -1,0 +1,2 @@
+Disparador temporal de compilación Windows para SISTEMA DEPORTIVO v2.1.0.
+No contiene código ni credenciales.
