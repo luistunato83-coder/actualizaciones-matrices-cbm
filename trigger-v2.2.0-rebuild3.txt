@@ -1,0 +1,1 @@
+Recompilación v2.2.0 desde paquete principal y archivos estáticos.
