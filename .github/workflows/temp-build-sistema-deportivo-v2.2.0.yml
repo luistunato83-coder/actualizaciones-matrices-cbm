@@ -22,8 +22,15 @@ jobs:
           if ($parts.Count -ne 6) { throw "Paquete fuente v2.2.0 incompleto" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes("source-v2.2.0.zip", [Convert]::FromBase64String($b64))
-          Expand-Archive -Path "source-v2.2.0.zip" -DestinationPath "." -Force
-          if (!(Test-Path "_v220/package.json")) { throw "No se pudo reconstruir el código v2.2.0" }
+          New-Item -ItemType Directory -Path "rebuild-v220" -Force | Out-Null
+          Expand-Archive -Path "source-v2.2.0.zip" -DestinationPath "rebuild-v220" -Force
+          $pkg = Get-ChildItem "rebuild-v220" -Recurse -Filter package.json | Select-Object -First 1
+          if (!$pkg) { throw "No se encontró package.json del código v2.2.0" }
+          $srcDir = $pkg.Directory.FullName
+          Write-Host "Proyecto localizado en: $srcDir"
+          New-Item -ItemType Directory -Path "app-v220" -Force | Out-Null
+          Copy-Item "$srcDir/*" "app-v220" -Recurse -Force
+          if (!(Test-Path "app-v220/package.json")) { throw "No se pudo preparar app-v220" }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,7 +38,7 @@ jobs:
           node-version: '22'
 
       - name: Syntax check
-        working-directory: _v220
+        working-directory: app-v220
         shell: pwsh
         run: |
           node --check src/main.js
@@ -41,17 +48,17 @@ jobs:
           node --check src/security.js
 
       - name: Install dependencies
-        working-directory: _v220
+        working-directory: app-v220
         run: npm install
 
       - name: Build protected installer and portable
-        working-directory: _v220
+        working-directory: app-v220
         run: npm run dist:protected
 
       - name: Verify executables
         shell: pwsh
         run: |
-          $files = Get-ChildItem "_v220/dist-protected/*.exe"
+          $files = Get-ChildItem "app-v220/dist-protected/*.exe"
           if ($files.Count -lt 2) { throw "No se generaron ambos ejecutables" }
           $files | ForEach-Object { Write-Host $_.Name $_.Length }
 
@@ -59,5 +66,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SISTEMA_DEPORTIVO_Windows_v2.2.0_PROTEGIDO
-          path: _v220/dist-protected/*.exe
+          path: app-v220/dist-protected/*.exe
           if-no-files-found: error
