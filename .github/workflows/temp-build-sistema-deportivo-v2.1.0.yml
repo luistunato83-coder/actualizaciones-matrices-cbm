@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.1.1
+name: TEMP Build SISTEMA DEPORTIVO v2.1.2
 
 on:
   pull_request:
@@ -28,15 +28,46 @@ jobs:
         run: |
           Copy-Item "build-sistema-deportivo-v2.1.0/patch-v2.1.1/security.js" "sistema-deportivo-v2.1.0/src/security.js" -Force
           Copy-Item "build-sistema-deportivo-v2.1.0/patch-v2.1.1/admin-bootstrap.json" "sistema-deportivo-v2.1.0/src/admin-bootstrap.json" -Force
+
+      - name: Apply v2.1.2 administrator input fix
+        shell: pwsh
+        run: |
           $pkgPath = "sistema-deportivo-v2.1.0/package.json"
           $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
-          $pkg.version = "2.1.1"
+          $pkg.version = "2.1.2"
           $pkg | ConvertTo-Json -Depth 20 | Set-Content $pkgPath -Encoding UTF8
+
+          $mainPath = "sistema-deportivo-v2.1.0/src/main.js"
+          $main = Get-Content $mainPath -Raw
+          $main = $main.Replace("if(String(password||'').length<8)throw new Error('La clave debe tener al menos 8 caracteres.');", "if(String(password||'').length<5)throw new Error('La clave debe tener al menos 5 caracteres.');")
+          $main = $main.Replace("if(String(d.next||'').length<8)throw new Error('La nueva clave debe tener al menos 8 caracteres.');", "if(String(d.next||'').length<5)throw new Error('La nueva clave debe tener al menos 5 caracteres.');")
+          Set-Content $mainPath $main -Encoding UTF8
+
+          $rendererPath = "sistema-deportivo-v2.1.0/src/renderer.js"
+          $renderer = Get-Content $rendererPath -Raw
+          $oldField = @'
+${field('setupPwd','Crear clave de Administrador','','full')}
+'@
+          $newField = @'
+<div class="field full"><label for="setupPwdInput">Crear clave de Administrador</label><input id="setupPwdInput" data-k="setupPwd" type="password" minlength="5" autocomplete="new-password" placeholder="Mínimo 5 caracteres"></div>
+'@
+          $renderer = $renderer.Replace($oldField.Trim(), $newField.Trim())
+          $renderer = $renderer.Replace("if(r.ok)alert('Clave Maestra validada e instalada solo en este equipo.')", "if(r.ok){alert('Clave Maestra validada e instalada solo en este equipo.');setTimeout(()=>{const i=$('#setupPwdInput');if(i){i.disabled=false;i.readOnly=false;i.style.pointerEvents='auto';i.focus()}},50)}")
+          $renderer = $renderer.Replace("const p=val(area,'setupPwd');if(!p)return alert('Ingrese una clave de Administrador.');", "const p=val(area,'setupPwd');if(String(p||'').length<5)return alert('La clave de Administrador debe tener al menos 5 caracteres.');")
+          $renderer = $renderer.Replace("$('#changePwd').onclick=async()=>{try{await api.changeAdminPassword({current:val(area,'currentPwd'),next:val(area,'newPwd')});alert('Clave cambiada.')}catch(e){alert(e.message)}}", "$('#changePwd').onclick=async()=>{const np=val(area,'newPwd');if(String(np||'').length<5)return alert('La nueva clave debe tener al menos 5 caracteres.');try{await api.changeAdminPassword({current:val(area,'currentPwd'),next:np});alert('Clave cambiada.')}catch(e){alert(e.message)}}")
+          $renderer += "`n;setTimeout(()=>{const i=document.querySelector('#setupPwdInput');if(i){i.disabled=false;i.readOnly=false;i.style.pointerEvents='auto';i.tabIndex=0}},0);`n"
+          Set-Content $rendererPath $renderer -Encoding UTF8
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Syntax check
+        working-directory: sistema-deportivo-v2.1.0
+        run: |
+          node --check src/main.js
+          node --check src/renderer.js
 
       - name: Install dependencies
         working-directory: sistema-deportivo-v2.1.0
@@ -50,10 +81,12 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem "sistema-deportivo-v2.1.0/dist/*.exe" | ForEach-Object { Write-Host $_.Name $_.Length }
+          if (-not (Test-Path "sistema-deportivo-v2.1.0/dist/SISTEMA_DEPORTIVO_Instalador_2.1.2_x64.exe")) { throw "Falta instalador v2.1.2" }
+          if (-not (Test-Path "sistema-deportivo-v2.1.0/dist/SISTEMA_DEPORTIVO_Portable_2.1.2_x64.exe")) { throw "Falta portable v2.1.2" }
 
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.1.1
+          name: SISTEMA_DEPORTIVO_Windows_v2.1.2
           path: sistema-deportivo-v2.1.0/dist/*.exe
           if-no-files-found: error
