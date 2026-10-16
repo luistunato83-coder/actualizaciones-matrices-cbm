@@ -18,19 +18,20 @@ jobs:
       - name: Rebuild complete v2.2.0 source
         shell: pwsh
         run: |
-          $parts = Get-ChildItem "build-sistema-deportivo-v2.1.0/full-v2.2.0/source.part*" | Sort-Object Name
-          if ($parts.Count -ne 6) { throw "Paquete fuente v2.2.0 incompleto" }
+          $parts = Get-ChildItem "build-sistema-deportivo-v2.1.0/source-v2.2.0/patch.part*" | Sort-Object Name
+          if ($parts.Count -ne 5) { throw "Paquete principal v2.2.0 incompleto" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          [IO.File]::WriteAllBytes("source-v2.2.0.zip", [Convert]::FromBase64String($b64))
-          New-Item -ItemType Directory -Path "rebuild-v220" -Force | Out-Null
-          Expand-Archive -Path "source-v2.2.0.zip" -DestinationPath "rebuild-v220" -Force
-          $pkg = Get-ChildItem "rebuild-v220" -Recurse -Filter package.json | Select-Object -First 1
-          if (!$pkg) { throw "No se encontró package.json del código v2.2.0" }
-          $srcDir = $pkg.Directory.FullName
-          Write-Host "Proyecto localizado en: $srcDir"
+          [IO.File]::WriteAllBytes("v220_patch.tar.xz", [Convert]::FromBase64String($b64))
           New-Item -ItemType Directory -Path "app-v220" -Force | Out-Null
-          Copy-Item "$srcDir/*" "app-v220" -Recurse -Force
-          if (!(Test-Path "app-v220/package.json")) { throw "No se pudo preparar app-v220" }
+          python -c "import tarfile; tarfile.open('v220_patch.tar.xz','r:xz').extractall('app-v220')"
+          New-Item -ItemType Directory -Path "app-v220/src" -Force | Out-Null
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/security.js" "app-v220/src/security.js" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/admin-bootstrap.json" "app-v220/src/admin-bootstrap.json" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/index.html" "app-v220/src/index.html" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/styles.css" "app-v220/src/styles.css" -Force
+          if (!(Test-Path "app-v220/package.json")) { throw "No se pudo reconstruir package.json" }
+          if (!(Test-Path "app-v220/src/main.js")) { throw "No se pudo reconstruir main.js" }
+          Write-Host "Fuente v2.2.0 reconstruida correctamente"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
