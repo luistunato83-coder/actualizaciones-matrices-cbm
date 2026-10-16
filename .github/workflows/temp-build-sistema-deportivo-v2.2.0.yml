@@ -1,0 +1,76 @@
+name: TEMP Build SISTEMA DEPORTIVO v2.2.0
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout isolated build branch
+        uses: actions/checkout@v4
+        with:
+          ref: build-sistema-deportivo-v2-2-0
+
+      - name: Rebuild v2.2.0 source package
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem "build-sistema-deportivo-v2.2.0/source.part*" | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes("source-v2.2.0.zip", [Convert]::FromBase64String($b64))
+          Expand-Archive -Path "source-v2.2.0.zip" -DestinationPath "." -Force
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Syntax check original source
+        working-directory: sistema-deportivo-v2.2.0
+        run: |
+          node --check src/main.js
+          node --check src/preload.js
+          node --check src/renderer.js
+          node --check src/security.js
+          node --check src/store.js
+
+      - name: Install dependencies
+        working-directory: sistema-deportivo-v2.2.0
+        run: npm install
+
+      - name: Add source protection tooling
+        working-directory: sistema-deportivo-v2.2.0
+        run: npm install --no-save javascript-obfuscator@4.1.1
+
+      - name: Obfuscate executable JavaScript
+        shell: pwsh
+        working-directory: sistema-deportivo-v2.2.0
+        run: |
+          $files = @('src/main.js','src/preload.js','src/renderer.js','src/security.js','src/store.js')
+          foreach ($f in $files) {
+            $tmp = "$f.obf.js"
+            npx javascript-obfuscator $f --output $tmp --compact true --control-flow-flattening true --control-flow-flattening-threshold 0.35 --dead-code-injection true --dead-code-injection-threshold 0.15 --string-array true --string-array-encoding base64 --string-array-threshold 0.8 --rename-globals false --self-defending true
+            Move-Item -Force $tmp $f
+            node --check $f
+          }
+
+      - name: Build installer and portable
+        working-directory: sistema-deportivo-v2.2.0
+        run: npm run dist
+
+      - name: Verify executables
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem "sistema-deportivo-v2.2.0/dist/*.exe"
+          if ($files.Count -lt 2) { throw 'No se generaron Instalador y Portable.' }
+          $files | ForEach-Object { Write-Host $_.Name $_.Length }
+
+      - name: Upload installer and portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SISTEMA_DEPORTIVO_Windows_v2.2.0
+          path: sistema-deportivo-v2.2.0/dist/*.exe
+          if-no-files-found: error
