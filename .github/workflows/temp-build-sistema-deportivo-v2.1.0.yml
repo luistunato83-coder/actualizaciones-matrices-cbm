@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.1.0
+name: TEMP Build SISTEMA DEPORTIVO v2.1.1
 
 on:
   pull_request:
@@ -15,13 +15,23 @@ jobs:
         with:
           ref: build-sistema-deportivo-v2-1-0
 
-      - name: Rebuild source package
+      - name: Rebuild v2.1.0 source package
         shell: pwsh
         run: |
           $parts = Get-ChildItem "build-sistema-deportivo-v2.1.0/source.part*" | Sort-Object Name
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes("source.zip", [Convert]::FromBase64String($b64))
           Expand-Archive -Path "source.zip" -DestinationPath "." -Force
+
+      - name: Apply v2.1.1 security compatibility patch
+        shell: pwsh
+        run: |
+          Copy-Item "build-sistema-deportivo-v2.1.0/patch-v2.1.1/security.js" "sistema-deportivo-v2.1.0/src/security.js" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/patch-v2.1.1/admin-bootstrap.json" "sistema-deportivo-v2.1.0/src/admin-bootstrap.json" -Force
+          $pkgPath = "sistema-deportivo-v2.1.0/package.json"
+          $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
+          $pkg.version = "2.1.1"
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content $pkgPath -Encoding UTF8
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,9 +46,14 @@ jobs:
         working-directory: sistema-deportivo-v2.1.0
         run: npm run dist
 
+      - name: Verify executables
+        shell: pwsh
+        run: |
+          Get-ChildItem "sistema-deportivo-v2.1.0/dist/*.exe" | ForEach-Object { Write-Host $_.Name $_.Length }
+
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.1.0
+          name: SISTEMA_DEPORTIVO_Windows_v2.1.1
           path: sistema-deportivo-v2.1.0/dist/*.exe
           if-no-files-found: error
