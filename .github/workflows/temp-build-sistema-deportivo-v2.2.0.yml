@@ -18,10 +18,19 @@ jobs:
       - name: Rebuild v2.2.0 source package
         shell: pwsh
         run: |
-          $parts = Get-ChildItem "build-sistema-deportivo-v2.2.0/source.part*" | Sort-Object Name
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $base = "build-sistema-deportivo-v2.2.0"
+          $order = @(
+            'source.part00',
+            'source.part01',
+            'source.part02a',
+            'source.part02b',
+            'source.part03',
+            'source.part04a',
+            'source.part04b'
+          )
+          $b64 = ($order | ForEach-Object { Get-Content (Join-Path $base $_) -Raw }) -join ''
           $b64 = [regex]::Replace($b64, '[^A-Za-z0-9+/=]', '')
-          Write-Host "Base64 chars:" $b64.Length
+          if ($b64.Length -ne 34944) { throw "Base64 inesperado: $($b64.Length) caracteres; se esperaban 34944." }
           [IO.File]::WriteAllBytes("source-v2.2.0.zip", [Convert]::FromBase64String($b64))
           Expand-Archive -Path "source-v2.2.0.zip" -DestinationPath "." -Force
 
