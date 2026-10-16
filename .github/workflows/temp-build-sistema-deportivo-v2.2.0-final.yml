@@ -19,7 +19,7 @@ jobs:
         shell: pwsh
         run: |
           $base = "build-sistema-deportivo-v2.2.0-final"
-          $order = @('source.part00','source.part01','source.part02','source.part03','source.part04','source.part05a','source.part05b','source.part06')
+          $order = @('source.part00','source.part01','source.part02a','source.part02b','source.part03','source.part04','source.part05a','source.part05b','source.part06y')
           $b64 = ($order | ForEach-Object { Get-Content (Join-Path $base $_) -Raw }) -join ''
           $b64 = [regex]::Replace($b64, '[^A-Za-z0-9+/=]', '')
           if ($b64.Length -ne 36388) { throw "Base64 inesperado: $($b64.Length)" }
