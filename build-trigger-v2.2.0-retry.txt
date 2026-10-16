@@ -1,0 +1,1 @@
+Reintento de compilación v2.2.0 después de corregir reconstrucción Base64.
