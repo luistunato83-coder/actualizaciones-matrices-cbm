@@ -45,17 +45,10 @@ jobs:
 
           $rendererPath = "sistema-deportivo-v2.1.0/src/renderer.js"
           $renderer = Get-Content $rendererPath -Raw
-          $oldField = @'
-${field('setupPwd','Crear clave de Administrador','','full')}
-'@
-          $newField = @'
-<div class="field full"><label for="setupPwdInput">Crear clave de Administrador</label><input id="setupPwdInput" data-k="setupPwd" type="password" minlength="5" autocomplete="new-password" placeholder="Mínimo 5 caracteres"></div>
-'@
-          $renderer = $renderer.Replace($oldField.Trim(), $newField.Trim())
-          $renderer = $renderer.Replace("if(r.ok)alert('Clave Maestra validada e instalada solo en este equipo.')", "if(r.ok){alert('Clave Maestra validada e instalada solo en este equipo.');setTimeout(()=>{const i=$('#setupPwdInput');if(i){i.disabled=false;i.readOnly=false;i.style.pointerEvents='auto';i.focus()}},50)}")
+          $renderer = $renderer.Replace('${field(''setupPwd'',''Crear clave de Administrador'','''',''full'')}', '<div class="field full"><label for="setupPwdInput">Crear clave de Administrador</label><input id="setupPwdInput" data-k="setupPwd" type="password" minlength="5" autocomplete="new-password" placeholder="Mínimo 5 caracteres"></div>')
+          $renderer = $renderer.Replace("if(r.ok)alert('Clave Maestra validada e instalada solo en este equipo.')", "if(r.ok){alert('Clave Maestra validada e instalada solo en este equipo.');setTimeout(()=>{const i=`$('#setupPwdInput');if(i){i.disabled=false;i.readOnly=false;i.style.pointerEvents='auto';i.focus()}},50)}")
           $renderer = $renderer.Replace("const p=val(area,'setupPwd');if(!p)return alert('Ingrese una clave de Administrador.');", "const p=val(area,'setupPwd');if(String(p||'').length<5)return alert('La clave de Administrador debe tener al menos 5 caracteres.');")
-          $renderer = $renderer.Replace("$('#changePwd').onclick=async()=>{try{await api.changeAdminPassword({current:val(area,'currentPwd'),next:val(area,'newPwd')});alert('Clave cambiada.')}catch(e){alert(e.message)}}", "$('#changePwd').onclick=async()=>{const np=val(area,'newPwd');if(String(np||'').length<5)return alert('La nueva clave debe tener al menos 5 caracteres.');try{await api.changeAdminPassword({current:val(area,'currentPwd'),next:np});alert('Clave cambiada.')}catch(e){alert(e.message)}}")
-          $renderer += "`n;setTimeout(()=>{const i=document.querySelector('#setupPwdInput');if(i){i.disabled=false;i.readOnly=false;i.style.pointerEvents='auto';i.tabIndex=0}},0);`n"
+          $renderer = $renderer.Replace("`$('#changePwd').onclick=async()=>{try{await api.changeAdminPassword({current:val(area,'currentPwd'),next:val(area,'newPwd')});alert('Clave cambiada.')}catch(e){alert(e.message)}}", "`$('#changePwd').onclick=async()=>{const np=val(area,'newPwd');if(String(np||'').length<5)return alert('La nueva clave debe tener al menos 5 caracteres.');try{await api.changeAdminPassword({current:val(area,'currentPwd'),next:np});alert('Clave cambiada.')}catch(e){alert(e.message)}}")
           Set-Content $rendererPath $renderer -Encoding UTF8
 
       - name: Setup Node.js
