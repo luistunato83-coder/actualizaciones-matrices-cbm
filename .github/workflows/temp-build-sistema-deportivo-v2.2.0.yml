@@ -1,0 +1,68 @@
+name: TEMP Build SISTEMA DEPORTIVO v2.2.0
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout isolated build branch
+        uses: actions/checkout@v4
+        with:
+          ref: build-sistema-deportivo-v2-1-0
+
+      - name: Rebuild base source package
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem "build-sistema-deportivo-v2.1.0/source.part*" | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes("source.zip", [Convert]::FromBase64String($b64))
+          Expand-Archive -Path "source.zip" -DestinationPath "." -Force
+
+      - name: Apply v2.2.0 offline owner patch
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem "build-sistema-deportivo-v2.1.0/source-v2.2.0/patch.part*" | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes("v220_patch.tar.xz", [Convert]::FromBase64String($b64))
+          tar -xJf v220_patch.tar.xz -C sistema-deportivo-v2.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Syntax check
+        working-directory: sistema-deportivo-v2.1.0
+        shell: pwsh
+        run: |
+          node --check src/main.js
+          node --check src/preload.js
+          node --check src/renderer.js
+          node --check src/store.js
+
+      - name: Install dependencies
+        working-directory: sistema-deportivo-v2.1.0
+        run: npm install
+
+      - name: Build protected installer and portable
+        working-directory: sistema-deportivo-v2.1.0
+        run: npm run dist:protected
+
+      - name: Verify executables
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem "sistema-deportivo-v2.1.0/dist-protected/*.exe"
+          if ($files.Count -lt 2) { throw "No se generaron ambos ejecutables" }
+          $files | ForEach-Object { Write-Host $_.Name $_.Length }
+
+      - name: Upload installer and portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SISTEMA_DEPORTIVO_Windows_v2.2.0_PROTEGIDO
+          path: sistema-deportivo-v2.1.0/dist-protected/*.exe
+          if-no-files-found: error
