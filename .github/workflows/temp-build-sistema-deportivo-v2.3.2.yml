@@ -76,7 +76,7 @@ jobs:
           $handlers = [regex]::Matches($m,"ipcMain\.handle\('([^']+)'") | ForEach-Object { $_.Groups[1].Value }
           $dups = $handlers | Group-Object | Where-Object Count -gt 1
           if ($dups) { throw ('IPC duplicados: ' + (($dups | ForEach-Object Name) -join ', ')) }
-          console.log('Integración funcional v2.4.0 OK')
+          Write-Host 'Integración funcional v2.4.0 OK'
 
       - name: Patch ExcelJS reader for Node 22
         shell: pwsh
