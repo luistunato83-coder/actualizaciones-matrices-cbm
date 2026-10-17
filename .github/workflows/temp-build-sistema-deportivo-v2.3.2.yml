@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.3.2
+name: TEMP Build SISTEMA DEPORTIVO v2.3.3
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
-          ref: build-sistema-deportivo-v2-3-1
+          ref: build-sistema-deportivo-v2-3-2
 
       - name: Rebuild v2.3.0 source
         shell: pwsh
@@ -22,9 +22,9 @@ jobs:
           if ($parts.Count -ne 3) { throw "Paquete fuente v2.3.0 incompleto" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes("source-v2.3.0.zip", [Convert]::FromBase64String($b64))
-          New-Item -ItemType Directory -Path "app-v232" -Force | Out-Null
-          Expand-Archive -Path "source-v2.3.0.zip" -DestinationPath "app-v232" -Force
-          if (!(Test-Path "app-v232/package.json")) { throw "No se pudo reconstruir package.json" }
+          New-Item -ItemType Directory -Path "app-v233" -Force | Out-Null
+          Expand-Archive -Path "source-v2.3.0.zip" -DestinationPath "app-v233" -Force
+          if (!(Test-Path "app-v233/package.json")) { throw "No se pudo reconstruir package.json" }
 
       - name: Reapply v2.3.1 secure administrator recovery
         shell: pwsh
@@ -35,17 +35,22 @@ jobs:
           $m = [regex]::Match($yaml,$pattern)
           if (!$m.Success) { throw "No se pudo recuperar el parche v2.3.1" }
           $script = ($m.Groups['script'].Value -split "`r?`n" | ForEach-Object { if ($_.Length -ge 10) { $_.Substring(10) } else { $_ } }) -join "`n"
-          $script = $script.Replace('app-v231','app-v232')
+          $script = $script.Replace('app-v231','app-v233')
           Set-Content "apply-v231.ps1" $script -Encoding UTF8
           & ./apply-v231.ps1
 
-      - name: Set v2.3.2 version
+      - name: Set v2.3.3 version
         shell: pwsh
         run: |
-          $p = Get-Content "app-v232/package.json" -Raw | ConvertFrom-Json
-          $p.version = "2.3.2"
-          $p.description = "SISTEMA DEPORTIVO v2.3.2 offline con licencia obligatoria, Administrador propietario y corrección robusta de importación Excel."
-          $p | ConvertTo-Json -Depth 20 | Set-Content "app-v232/package.json" -Encoding UTF8
+          $p = Get-Content "app-v233/package.json" -Raw | ConvertFrom-Json
+          $p.version = "2.3.3"
+          $p.description = "SISTEMA DEPORTIVO v2.3.3 offline con licencia obligatoria, generación de licencias corregida y temas Claro/Oscuro revisados."
+          $p | ConvertTo-Json -Depth 20 | Set-Content "app-v233/package.json" -Encoding UTF8
+
+      - name: Apply v2.3.3 license and theme fixes
+        shell: pwsh
+        run: |
+          & ./build-sistema-deportivo-v2.3.3/apply-v233.ps1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,7 +58,7 @@ jobs:
           node-version: '22'
 
       - name: Syntax check
-        working-directory: app-v232
+        working-directory: app-v233
         shell: pwsh
         run: |
           node --check src/main.js
@@ -63,13 +68,13 @@ jobs:
           node --check src/security.js
 
       - name: Install dependencies
-        working-directory: app-v232
+        working-directory: app-v233
         run: npm install
 
       - name: Patch ExcelJS reader for Node 22
         shell: pwsh
         run: |
-          $file = "app-v232/node_modules/exceljs/lib/utils/iterate-stream.js"
+          $file = "app-v233/node_modules/exceljs/lib/utils/iterate-stream.js"
           if (!(Test-Path $file)) { throw "No se encontró iterate-stream.js de ExcelJS" }
           @'
           module.exports = async function* iterateStream(stream) {
@@ -80,22 +85,12 @@ jobs:
               contents.push(data);
               if (contents.length >= HIGH_WATER_MARK) stream.pause();
             });
-
             let resolveStreamEndedPromise;
             const streamEndedPromise = new Promise(resolve => (resolveStreamEndedPromise = resolve));
-
             let ended = false;
-            stream.on('end', () => {
-              ended = true;
-              resolveStreamEndedPromise();
-            });
-
+            stream.on('end', () => { ended = true; resolveStreamEndedPromise(); });
             let error = false;
-            stream.on('error', err => {
-              error = err;
-              resolveStreamEndedPromise();
-            });
-
+            stream.on('error', err => { error = err; resolveStreamEndedPromise(); });
             while (!ended || contents.length > 0) {
               if (contents.length === 0) {
                 stream.resume();
@@ -109,7 +104,6 @@ jobs:
             }
             resolveStreamEndedPromise();
           };
-
           function once(eventEmitter, type) {
             return new Promise(resolve => {
               let fired = false;
@@ -126,19 +120,19 @@ jobs:
           '@ | Set-Content $file -Encoding UTF8
 
       - name: Build protected installer and portable
-        working-directory: app-v232
+        working-directory: app-v233
         run: npm run dist:protected
 
       - name: Verify executables
         shell: pwsh
         run: |
-          $files = Get-ChildItem "app-v232/dist-protected/*.exe"
+          $files = Get-ChildItem "app-v233/dist-protected/*.exe"
           if ($files.Count -lt 2) { throw "No se generaron ambos ejecutables" }
           $files | ForEach-Object { Write-Host $_.Name $_.Length }
 
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.3.2_PROTEGIDO
-          path: app-v232/dist-protected/*.exe
+          name: SISTEMA_DEPORTIVO_Windows_v2.3.3_PROTEGIDO
+          path: app-v233/dist-protected/*.exe
           if-no-files-found: error
