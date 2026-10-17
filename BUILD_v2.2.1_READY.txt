@@ -1,0 +1,1 @@
+v2.2.1: funciones locales del usuario final operativas sin licencia; botones de importación, respaldo y restauración con mensajes de estado; DIRECTIVA incluida en importación.
