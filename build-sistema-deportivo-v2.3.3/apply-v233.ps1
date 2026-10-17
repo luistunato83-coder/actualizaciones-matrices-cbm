@@ -8,8 +8,18 @@ Set-Content $mainPath $main -Encoding UTF8
 
 $rendererPath = "app-v233/src/renderer.js"
 $renderer = Get-Content $rendererPath -Raw
+$selectLine = @'
+const select=(k,l,v,opts,cl='')=>`<div class="field ${cl}"><label>${l}</label><select data-k="${k}">${opts.map(x=>`<option ${String(x)===String(v)?'selected':''}>${esc(x)}</option>`).join('')}</select></div>`;
+'@
+$themeHelper = @'
+const themeSelect=v=>`<div class="field"><label>Modo</label><select data-k="theme"><option value="light" ${v==='light'?'selected':''}>Claro</option><option value="dark" ${v==='dark'?'selected':''}>Oscuro</option></select></div>`;
+'@
+if (!$renderer.Contains($selectLine.Trim())) { throw "No se encontró el helper select" }
+if (!$renderer.Contains('const themeSelect=')) {
+  $renderer = $renderer.Replace($selectLine.Trim(), ($selectLine.Trim() + "`n" + $themeHelper.Trim()))
+}
 $oldTheme = "`${select('theme','Modo',a.theme||'light',['light','dark'])}"
-$newTheme = '`${`<div class="field"><label>Modo</label><select data-k="theme"><option value="light" ${(a.theme||''light'')===''light''?''selected'':''}>Claro</option><option value="dark" ${a.theme===''dark''?''selected'':''}>Oscuro</option></select></div>`}'
+$newTheme = "`${themeSelect(a.theme||'light')}"
 if (!$renderer.Contains($oldTheme)) { throw "No se encontró el selector de tema light/dark" }
 $renderer = $renderer.Replace($oldTheme,$newTheme)
 Set-Content $rendererPath $renderer -Encoding UTF8
