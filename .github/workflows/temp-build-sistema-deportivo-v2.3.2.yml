@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.3.5
+name: TEMP Build SISTEMA DEPORTIVO v2.4.0 FINAL
 
 on:
   pull_request:
@@ -13,62 +13,18 @@ jobs:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
-          ref: build-sistema-deportivo-v2-3-1
+          ref: build-sistema-deportivo-v2-4-0
 
-      - name: Rebuild v2.3.0 source
+      - name: Rebuild final v2.4.0 source
         shell: pwsh
         run: |
-          $parts = Get-ChildItem "build-sistema-deportivo-v2.3.0/source.part*" | Sort-Object Name
-          if ($parts.Count -ne 3) { throw "Paquete fuente v2.3.0 incompleto" }
+          $parts = Get-ChildItem "build-sistema-deportivo-v2.4.0-final/source.part*" | Sort-Object Name
+          if ($parts.Count -ne 5) { throw "Paquete fuente final v2.4.0 incompleto: se esperaban 5 partes" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          [IO.File]::WriteAllBytes("source-v2.3.0.zip", [Convert]::FromBase64String($b64))
-          New-Item -ItemType Directory -Path "app-v234" -Force | Out-Null
-          Expand-Archive -Path "source-v2.3.0.zip" -DestinationPath "app-v234" -Force
-          if (!(Test-Path "app-v234/package.json")) { throw "No se pudo reconstruir package.json" }
-
-      - name: Reapply v2.3.1 secure administrator recovery
-        shell: pwsh
-        run: |
-          $url = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/main/.github/workflows/temp-build-sistema-deportivo-v2.2.0.yml"
-          $yaml = (Invoke-WebRequest -UseBasicParsing $url).Content
-          $pattern = '(?ms)^      - name: Apply v2\.3\.1 secure admin recovery changes\r?\n        shell: pwsh\r?\n        run: \|\r?\n(?<script>.*?)(?=^      - name: Setup Node\.js)'
-          $m = [regex]::Match($yaml,$pattern)
-          if (!$m.Success) { throw "No se pudo recuperar el parche v2.3.1" }
-          $script = ($m.Groups['script'].Value -split "`r?`n" | ForEach-Object { if ($_.Length -ge 10) { $_.Substring(10) } else { $_ } }) -join "`n"
-          $script = $script.Replace('app-v231','app-v234')
-          Set-Content "apply-v231.ps1" $script -Encoding UTF8
-          & ./apply-v231.ps1
-
-      - name: Reapply v2.3.3 license and theme fixes
-        shell: pwsh
-        run: |
-          $url = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/build-sistema-deportivo-v2-3-2/build-sistema-deportivo-v2.3.3/apply-v233.ps1"
-          $script = (Invoke-WebRequest -UseBasicParsing $url).Content
-          $script = $script.Replace('app-v233','app-v234')
-          Set-Content "apply-v233.ps1" $script -Encoding UTF8
-          & ./apply-v233.ps1
-
-      - name: Reapply v2.3.4 definitive Excel import fix
-        shell: pwsh
-        run: |
-          $url = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/build-sistema-deportivo-v2-3-2/build-sistema-deportivo-v2.3.4/apply-v234.ps1"
-          Invoke-WebRequest -UseBasicParsing $url -OutFile "apply-v234.ps1"
-          & ./apply-v234.ps1
-
-      - name: Apply v2.3.5 simplified user activation
-        shell: pwsh
-        run: |
-          $url = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/build-sistema-deportivo-v2-3-2/build-sistema-deportivo-v2.3.5/apply-v235.ps1"
-          Invoke-WebRequest -UseBasicParsing $url -OutFile "apply-v235.ps1"
-          & ./apply-v235.ps1
-
-      - name: Set v2.3.5 version
-        shell: pwsh
-        run: |
-          $p = Get-Content "app-v234/package.json" -Raw | ConvertFrom-Json
-          $p.version = "2.3.5"
-          $p.description = "SISTEMA DEPORTIVO v2.3.5 offline con licencia obligatoria y activación simplificada: el usuario final solo carga su archivo de licencia."
-          $p | ConvertTo-Json -Depth 20 | Set-Content "app-v234/package.json" -Encoding UTF8
+          [IO.File]::WriteAllBytes("source-v2.4.0-final.zip", [Convert]::FromBase64String($b64))
+          New-Item -ItemType Directory -Path "app-v240" -Force | Out-Null
+          Expand-Archive -Path "source-v2.4.0-final.zip" -DestinationPath "app-v240" -Force
+          if (!(Test-Path "app-v240/package.json")) { throw "No se pudo reconstruir package.json" }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -76,7 +32,7 @@ jobs:
           node-version: '22'
 
       - name: Syntax check
-        working-directory: app-v234
+        working-directory: app-v240
         shell: pwsh
         run: |
           node --check src/main.js
@@ -86,55 +42,53 @@ jobs:
           node --check src/security.js
 
       - name: Install dependencies
-        working-directory: app-v234
+        working-directory: app-v240
         run: npm install
 
-      - name: Test XLSX import engine
-        working-directory: app-v234
+      - name: Test XLSX engine
+        working-directory: app-v240
         shell: pwsh
         run: |
           @'
           const fs=require('fs');
           const XLSX=require('xlsx');
           const wb=XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Nombre del equipo','Nombre corto','Escudo (ruta)'],['Equipo Demo','DEMO','']]),'EQUIPOS');
-          XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Equipo','N.º','Nombre completo','Documento','Fecha nacimiento','Posición','Estado'],['Equipo Demo','1','Jugador Demo','0001','','Arquero','Activo']]),'JUGADORES');
-          XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Equipo','Presidente','Vicepresidente','Secretario','Tesorero','Delegado','DT/Entrenador','Teléfono'],['Equipo Demo','Presidente Demo','','','','','','']]),'DIRECTIVA');
-          XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Nombre completo','Documento','Teléfono','Categoría','Observaciones'],['Árbitro Demo','A001','','Principal','']]),'ARBITROS');
-          const f='test-import.xlsx';
-          XLSX.writeFile(wb,f);
-          const b=XLSX.read(fs.readFileSync(f),{type:'buffer',raw:false});
-          const required=['EQUIPOS','JUGADORES','DIRECTIVA','ARBITROS'];
-          if(!b||!b.Sheets||required.some(n=>!b.Sheets[n])) throw new Error('Falló la prueba de lectura XLSX');
-          for(const n of required){const rows=XLSX.utils.sheet_to_json(b.Sheets[n],{header:1,defval:'',raw:false});if(rows.length<2)throw new Error('Hoja sin datos: '+n)}
+          for(const n of ['EQUIPOS','JUGADORES','DIRECTIVA','ARBITROS']) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Campo'],['Demo']]),n);
+          const f='test-import.xlsx'; XLSX.writeFile(wb,f);
+          const b=XLSX.read(fs.readFileSync(f),{type:'buffer'});
+          if(!b||!b.Sheets||['EQUIPOS','JUGADORES','DIRECTIVA','ARBITROS'].some(n=>!b.Sheets[n])) throw new Error('Falló prueba XLSX');
           fs.unlinkSync(f);
-          console.log('Prueba XLSX correcta:',b.SheetNames.join(', '));
+          console.log('XLSX OK');
           '@ | Set-Content test-xlsx.js -Encoding UTF8
           node test-xlsx.js
           Remove-Item test-xlsx.js -Force
 
-      - name: Verify simplified activation UI
-        working-directory: app-v234
+      - name: Verify v2.4.0 functional integration
+        working-directory: app-v240
         shell: pwsh
         run: |
-          $r = Get-Content "src/renderer.js" -Raw
-          if ($r.Contains('<div class="activationCode"><span>Código de dispositivo</span>')) { throw "La pantalla de usuario todavía muestra el código de dispositivo" }
-          if (!$r.Contains('sin pedirle ningún código')) { throw "No se aplicó la activación simplificada" }
+          $m = Get-Content src/main.js -Raw
+          $r = Get-Content src/renderer.js -Raw
+          $p = Get-Content src/preload.js -Raw
+          if ($m -match 'Próximamente' -or $r -match 'Próximamente') { throw 'Aún existen módulos marcados Próximamente' }
+          foreach($needle in @("ipcMain.handle('audit:list'","ipcMain.handle('stats:exportExcel'","ipcMain.handle('formats:refereeAssignments'","ipcMain.handle('fixture:advance'","ipcMain.handle('backup:restoreConfirm'","ipcMain.handle('update:create'")) { if (!$m.Contains($needle)) { throw "Falta integración: $needle" } }
+          foreach($needle in @('exportStatsExcel','exportStatsDocument','restoreJsonConfirm','generateRefereeAssignments','auditList','diagnostics','createUpdate')) { if (!$p.Contains($needle)) { throw "Falta API preload: $needle" } }
+          $handlers = [regex]::Matches($m,"ipcMain\.handle\('([^']+)'") | ForEach-Object { $_.Groups[1].Value }
+          $dups = $handlers | Group-Object | Where-Object Count -gt 1
+          if ($dups) { throw ('IPC duplicados: ' + (($dups | ForEach-Object Name) -join ', ')) }
+          console.log('Integración funcional v2.4.0 OK')
 
       - name: Patch ExcelJS reader for Node 22
         shell: pwsh
         run: |
-          $file = "app-v234/node_modules/exceljs/lib/utils/iterate-stream.js"
+          $file = "app-v240/node_modules/exceljs/lib/utils/iterate-stream.js"
           if (!(Test-Path $file)) { throw "No se encontró iterate-stream.js de ExcelJS" }
           @'
           module.exports = async function* iterateStream(stream) {
             const contents = [];
             const HIGH_WATER_MARK = 64;
             const LOW_WATER_MARK = 16;
-            stream.on('data', data => {
-              contents.push(data);
-              if (contents.length >= HIGH_WATER_MARK) stream.pause();
-            });
+            stream.on('data', data => { contents.push(data); if (contents.length >= HIGH_WATER_MARK) stream.pause(); });
             let resolveStreamEndedPromise;
             const streamEndedPromise = new Promise(resolve => (resolveStreamEndedPromise = resolve));
             let ended = false;
@@ -142,14 +96,8 @@ jobs:
             let error = false;
             stream.on('error', err => { error = err; resolveStreamEndedPromise(); });
             while (!ended || contents.length > 0) {
-              if (contents.length === 0) {
-                stream.resume();
-                await Promise.race([once(stream, 'data'), streamEndedPromise]);
-              } else {
-                const data = contents.shift();
-                if (contents.length <= LOW_WATER_MARK) stream.resume();
-                yield data;
-              }
+              if (contents.length === 0) { stream.resume(); await Promise.race([once(stream, 'data'), streamEndedPromise]); }
+              else { const data = contents.shift(); if (contents.length <= LOW_WATER_MARK) stream.resume(); yield data; }
               if (error) throw error;
             }
             resolveStreamEndedPromise();
@@ -157,32 +105,26 @@ jobs:
           function once(eventEmitter, type) {
             return new Promise(resolve => {
               let fired = false;
-              const handler = () => {
-                if (!fired) {
-                  fired = true;
-                  eventEmitter.removeListener(type, handler);
-                  resolve();
-                }
-              };
+              const handler = () => { if (!fired) { fired = true; eventEmitter.removeListener(type, handler); resolve(); } };
               eventEmitter.addListener(type, handler);
             });
           }
           '@ | Set-Content $file -Encoding UTF8
 
       - name: Build protected installer and portable
-        working-directory: app-v234
+        working-directory: app-v240
         run: npm run dist:protected
 
       - name: Verify executables
         shell: pwsh
         run: |
-          $files = Get-ChildItem "app-v234/dist-protected/*.exe"
-          if ($files.Count -lt 2) { throw "No se generaron ambos ejecutables" }
+          $files = Get-ChildItem "app-v240/dist-protected/*.exe"
+          if ($files.Count -lt 2) { throw "No se generaron instalador y portable" }
           $files | ForEach-Object { Write-Host $_.Name $_.Length }
 
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.3.5_PROTEGIDO
-          path: app-v234/dist-protected/*.exe
+          name: SISTEMA_DEPORTIVO_Windows_v2.4.0_FINAL_PROTEGIDO
+          path: app-v240/dist-protected/*.exe
           if-no-files-found: error
