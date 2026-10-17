@@ -13,7 +13,7 @@ jobs:
       - name: Checkout source branch
         uses: actions/checkout@v4
         with:
-          ref: build-sistema-deportivo-v2-3-2
+          ref: build-sistema-deportivo-v2-3-1
 
       - name: Rebuild v2.3.0 source
         shell: pwsh
@@ -50,7 +50,9 @@ jobs:
       - name: Apply v2.3.3 license and theme fixes
         shell: pwsh
         run: |
-          & ./build-sistema-deportivo-v2.3.3/apply-v233.ps1
+          $patchUrl = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/build-sistema-deportivo-v2-3-2/build-sistema-deportivo-v2.3.3/apply-v233.ps1"
+          Invoke-WebRequest -UseBasicParsing $patchUrl -OutFile "apply-v233.ps1"
+          & ./apply-v233.ps1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
