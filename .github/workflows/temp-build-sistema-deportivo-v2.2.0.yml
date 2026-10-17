@@ -30,11 +30,8 @@ jobs:
       - name: Apply v2.3.1 secure admin recovery patch
         shell: pwsh
         run: |
-          Copy-Item "build-sistema-deportivo-v2.3.1/v2.3.1.patch" "app-v231/v2.3.1.patch" -Force
-          Push-Location "app-v231"
-          git apply --check "v2.3.1.patch"
-          git apply "v2.3.1.patch"
-          Pop-Location
+          git apply --check --directory=app-v231 "build-sistema-deportivo-v2.3.1/v2.3.1.patch"
+          git apply --directory=app-v231 "build-sistema-deportivo-v2.3.1/v2.3.1.patch"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
