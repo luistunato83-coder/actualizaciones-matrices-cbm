@@ -1,0 +1,64 @@
+--- a/src/main.js
++++ b/src/main.js
+@@ -3,7 +3,7 @@
+ const ExcelJS=require('exceljs');
+ const {openStore}=require('./store');
+ const {stableMachineCode,verifyLicense,hashPassword,canonicalPayload}=require('./security');
+-let store,mode='user';const D=()=>store.data,byId=(a,id)=>a.find(x=>Number(x.id)===Number(id)),nextId=k=>store.next(k);
++let store,mode='user',adminRecoveryAuthorizedUntil=0;const D=()=>store.data,byId=(a,id)=>a.find(x=>Number(x.id)===Number(id)),nextId=k=>store.next(k);
+ const cfg=()=>D().config,save=()=>store.save(),isAdmin=()=>mode==='admin';
+ function activeAdminHash(){const a=cfg().admin||{};return a.salt&&a.hash?{salt:a.salt,hash:a.hash}:null}
+ function adminConfigured(){return !!activeAdminHash()}
+@@ -23,6 +23,7 @@
+ ipcMain.handle('session:get',()=>({mode,machineCode:stableMachineCode(),adminConfigured:adminConfigured(),masterKeyInstalled:fs.existsSync(masterKeyPath()),offline:true,version:app.getVersion()}));
+ ipcMain.handle('session:admin',(_e,password)=>{const a=activeAdminHash();if(!a)throw new Error('Administrador aún no inicializado. Instale primero la Clave Maestra y cree su clave de acceso.');if(hashPassword(password,a.salt)!==a.hash)throw new Error('Clave de Administrador incorrecta.');mode='admin';return{mode}});
+ ipcMain.handle('admin:provision',(_e,password)=>{if(adminConfigured())throw new Error('El Administrador ya está inicializado.');if(!fs.existsSync(masterKeyPath()))throw new Error('Instale primero la Clave Maestra de Administrador.');if(String(password||'').length<5)throw new Error('La clave debe tener al menos 5 caracteres.');const salt=crypto.randomBytes(16).toString('hex');cfg().admin={salt,hash:hashPassword(password,salt),initializedAt:new Date().toISOString()};save();return{ok:true}});
++ipcMain.handle('admin:reset',(_e,password)=>{if(!adminConfigured())throw new Error('El Administrador aún no está inicializado.');if(Date.now()>adminRecoveryAuthorizedUntil)throw new Error('Primero valide nuevamente la Clave Maestra privada.');if(String(password||'').length<5)throw new Error('La nueva clave debe tener al menos 5 caracteres.');const salt=crypto.randomBytes(16).toString('hex');cfg().admin={salt,hash:hashPassword(password,salt),initializedAt:cfg().admin?.initializedAt||new Date().toISOString(),resetAt:new Date().toISOString()};adminRecoveryAuthorizedUntil=0;save();return{ok:true}});
+ ipcMain.handle('session:user',()=>{mode='user';return{mode}});
+ ipcMain.handle('admin:password',(_e,d)=>{requireAdmin();const old=activeAdminHash();if(!old||hashPassword(d.current,old.salt)!==old.hash)throw new Error('La clave actual no es correcta.');if(String(d.next||'').length<5)throw new Error('La nueva clave debe tener al menos 5 caracteres.');const salt=crypto.randomBytes(16).toString('hex');cfg().admin={salt,hash:hashPassword(d.next,salt)};save();return true});
+ ipcMain.handle('machine:code',()=>stableMachineCode());
+@@ -32,7 +33,7 @@
+ 
+ ipcMain.handle('license:status',()=>{const v=verifyLicense(cfg().license);return{active:v.ok,reason:v.reason||'',holder:cfg().license?.holder||'',licenseId:cfg().license?.licenseId||'',machineCode:stableMachineCode()}});
+ ipcMain.handle('license:activate',async()=>{const r=await dialog.showOpenDialog({properties:['openFile'],filters:[{name:'Licencia SISTEMA DEPORTIVO',extensions:['latlic']}]});if(r.canceled)return{ok:false,reason:'Cancelado'};try{const lic=JSON.parse(fs.readFileSync(r.filePaths[0],'utf8')),v=verifyLicense(lic);if(!v.ok)return v;cfg().license=lic;save();return{ok:true,holder:lic.holder}}catch{return{ok:false,reason:'Archivo de licencia no válido'}}});
+-ipcMain.handle('license:installMasterKey',async()=>{if(adminConfigured())requireAdmin();const r=await dialog.showOpenDialog({properties:['openFile'],filters:[{name:'Clave Maestra',extensions:['pem']}]});if(r.canceled)return{ok:false};const pem=fs.readFileSync(r.filePaths[0],'utf8');if(!masterKeyMatches(pem))throw new Error('La Clave Maestra no corresponde a este SISTEMA DEPORTIVO.');const dest=masterKeyPath();fs.copyFileSync(r.filePaths[0],dest);return{ok:true,file:dest}});
++ipcMain.handle('license:installMasterKey',async(_e,d={})=>{const recovery=!!d.recovery;if(adminConfigured()&&!recovery)requireAdmin();const r=await dialog.showOpenDialog({properties:['openFile'],filters:[{name:'Clave Maestra',extensions:['pem']}]});if(r.canceled)return{ok:false};const pem=fs.readFileSync(r.filePaths[0],'utf8');if(!masterKeyMatches(pem))throw new Error('La Clave Maestra no corresponde a este SISTEMA DEPORTIVO.');const dest=masterKeyPath();fs.copyFileSync(r.filePaths[0],dest);if(recovery&&adminConfigured())adminRecoveryAuthorizedUntil=Date.now()+5*60*1000;return{ok:true,file:dest,recoveryAuthorized:recovery&&adminConfigured()}});
+ ipcMain.handle('license:generate',(_e,d)=>{requireAdmin();const kp=masterKeyPath();if(!fs.existsSync(kp))throw new Error('Primero instale la Clave Maestra de licencias desde Configuración > Administrador.');const holder=String(d.holder||'').trim().replace(/\s+/g,' ');if(holder.length<2)throw new Error('Ingrese el nombre de la persona o usuario.');const machineCode=String(d.machineCode||'').trim().toUpperCase();if(!/^[A-F0-9]{24}$/.test(machineCode))throw new Error('Ingrese el código de dispositivo de 24 caracteres de la computadora que va a activar.');const payload={licenseId:crypto.randomUUID(),holder,machineCode,issuedAt:new Date().toISOString(),product:'SISTEMA_DEPORTIVO_F7',edition:'USUARIO_FINAL',offline:true};const signature=crypto.sign(null,Buffer.from(canonicalPayload(payload)),fs.readFileSync(kp,'utf8')).toString('base64');const lic={...payload,signature};const out=path.join(app.getPath('downloads'),`Licencia_SISTEMA_DEPORTIVO_${safeName(holder)}_${payload.licenseId.slice(0,8)}.latlic`);fs.writeFileSync(out,JSON.stringify(lic,null,2));cfg().issuedLicenses=cfg().issuedLicenses||[];cfg().issuedLicenses.unshift({holder,machineCode,licenseId:payload.licenseId,issuedAt:payload.issuedAt,file:out});cfg().issuedLicenses=cfg().issuedLicenses.slice(0,500);save();return{ok:true,file,...payload}});
+ ipcMain.handle('license:list',()=>{requireAdmin();return cfg().issuedLicenses||[]});
+ 
+--- a/src/preload.js
++++ b/src/preload.js
+@@ -1,8 +1,8 @@
+ const {contextBridge,ipcRenderer}=require('electron');
+ contextBridge.exposeInMainWorld('api',{
+- getSession:()=>ipcRenderer.invoke('session:get'),enterAdmin:p=>ipcRenderer.invoke('session:admin',p),exitAdmin:()=>ipcRenderer.invoke('session:user'),changeAdminPassword:d=>ipcRenderer.invoke('admin:password',d),provisionAdmin:p=>ipcRenderer.invoke('admin:provision',p),machineCode:()=>ipcRenderer.invoke('machine:code'),
++ getSession:()=>ipcRenderer.invoke('session:get'),enterAdmin:p=>ipcRenderer.invoke('session:admin',p),exitAdmin:()=>ipcRenderer.invoke('session:user'),changeAdminPassword:d=>ipcRenderer.invoke('admin:password',d),provisionAdmin:p=>ipcRenderer.invoke('admin:provision',p),resetAdmin:p=>ipcRenderer.invoke('admin:reset',p),machineCode:()=>ipcRenderer.invoke('machine:code'),
+  getConfig:()=>ipcRenderer.invoke('config:get'),saveConfig:d=>ipcRenderer.invoke('config:save',d),setAppearance:d=>ipcRenderer.invoke('appearance:set',d),
+- licenseStatus:()=>ipcRenderer.invoke('license:status'),activateLicense:()=>ipcRenderer.invoke('license:activate'),generateLicense:d=>ipcRenderer.invoke('license:generate',d),issuedLicenses:()=>ipcRenderer.invoke('license:list'),installMasterKey:()=>ipcRenderer.invoke('license:installMasterKey'),
++ licenseStatus:()=>ipcRenderer.invoke('license:status'),activateLicense:()=>ipcRenderer.invoke('license:activate'),generateLicense:d=>ipcRenderer.invoke('license:generate',d),issuedLicenses:()=>ipcRenderer.invoke('license:list'),installMasterKey:d=>ipcRenderer.invoke('license:installMasterKey',d),
+  listTeams:()=>ipcRenderer.invoke('teams:list'),saveTeam:d=>ipcRenderer.invoke('teams:save',d),deleteTeam:id=>ipcRenderer.invoke('teams:delete',id),pickImage:()=>ipcRenderer.invoke('file:image'),
+  listPlayers:id=>ipcRenderer.invoke('players:list',id),savePlayer:d=>ipcRenderer.invoke('players:save',d),deletePlayer:id=>ipcRenderer.invoke('players:delete',id),
+  listReferees:()=>ipcRenderer.invoke('refs:list'),saveReferee:d=>ipcRenderer.invoke('refs:save',d),deleteReferee:id=>ipcRenderer.invoke('refs:delete',id),
+--- a/src/renderer.js
++++ b/src/renderer.js
+@@ -35,7 +35,7 @@
+ }
+ function renderOwnerGate(){
+  const box=$('#gateAdminArea');if(!box)return;
+- if(session.adminConfigured){box.innerHTML=`<div class="ownerGate"><h3>Acceso de Administrador propietario</h3><input id="gateAdminPwd" type="password" minlength="5" placeholder="Clave de Administrador"><button id="gateAdminEnter" class="btn primary">Ingresar como Administrador</button></div>`;setTimeout(()=>$('#gateAdminPwd')?.focus(),30);$('#gateAdminEnter').onclick=async()=>{try{const p=$('#gateAdminPwd').value;if(!p)return;await api.enterAdmin(p);location.reload()}catch(e){alert(e.message||e)}};
++ if(session.adminConfigured){box.innerHTML=`<div class="ownerGate"><h3>Acceso de Administrador propietario</h3><input id="gateAdminPwd" type="password" minlength="5" placeholder="Clave de Administrador"><button id="gateAdminEnter" class="btn primary">Ingresar como Administrador</button><button id="gateAdminRecover" class="btn" style="margin-top:10px">Restablecer clave de Administrador propietario</button><div id="gateRecoveryArea"></div></div>`;setTimeout(()=>$('#gateAdminPwd')?.focus(),30);$('#gateAdminEnter').onclick=async()=>{try{const p=$('#gateAdminPwd').value;if(!p)return;await api.enterAdmin(p);location.reload()}catch(e){alert(e.message||e)}};$('#gateAdminRecover').onclick=()=>{const r=$('#gateRecoveryArea');r.innerHTML=`<div class="ownerRecovery"><p class="muted">Para recuperar el acceso debe validar nuevamente la Clave Maestra privada del propietario.</p><button id="gateRecoveryMaster" class="btn">Validar Clave Maestra</button><input id="gateRecoveryPwd" type="password" minlength="5" placeholder="Nueva clave de Administrador (mín. 5)" disabled><input id="gateRecoveryPwd2" type="password" minlength="5" placeholder="Confirmar nueva clave" disabled><button id="gateRecoverySave" class="btn primary" disabled>Guardar nueva clave</button></div>`;$('#gateRecoveryMaster').onclick=async()=>{try{const x=await api.installMasterKey({recovery:true});if(!x?.ok)return;$('#gateRecoveryPwd').disabled=false;$('#gateRecoveryPwd2').disabled=false;$('#gateRecoverySave').disabled=false;$('#gateRecoveryPwd').focus();alert('Clave Maestra validada. Ahora cree su nueva clave de Administrador.')}catch(e){alert(e.message||e)}};$('#gateRecoverySave').onclick=async()=>{const a=$('#gateRecoveryPwd').value,b=$('#gateRecoveryPwd2').value;if(String(a||'').length<5)return alert('La nueva clave debe tener al menos 5 caracteres.');if(a!==b)return alert('Las claves no coinciden.');try{await api.resetAdmin(a);alert('Clave de Administrador restablecida correctamente.');location.reload()}catch(e){alert(e.message||e)}}};
+  }else{
+   box.innerHTML=`<div class="ownerGate"><h3>Inicialización única del Administrador propietario</h3><p class="muted">Solo debe realizarse en la computadora privada del propietario. Requiere la Clave Maestra.</p><button id="gateMaster" class="btn">Importar Clave Maestra</button><input id="gateSetupPwd" type="password" minlength="5" placeholder="Crear clave de Administrador (mín. 5)" ${session.masterKeyInstalled?'':'disabled'}><button id="gateSetup" class="btn primary" ${session.masterKeyInstalled?'':'disabled'}>Inicializar Administrador</button></div>`;
+   $('#gateMaster').onclick=async()=>{try{const r=await api.installMasterKey();if(r.ok){session.masterKeyInstalled=true;renderOwnerGate()}}catch(e){alert(e.message||e)}};
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "sistema-deportivo-unico-latc",
+-  "version": "2.3.0",
+-  "description": "SISTEMA DEPORTIVO v2.3.0 offline con licencia obligatoria por dispositivo, usuario final y Administrador propietario protegido.",
++  "version": "2.3.1",
++  "description": "SISTEMA DEPORTIVO v2.3.1 offline con licencia obligatoria por dispositivo, Administrador propietario protegido y recuperación mediante Clave Maestra.",
+   "author": "L.A.T.C.",
+   "main": "src/main.js",
+   "license": "UNLICENSED",
