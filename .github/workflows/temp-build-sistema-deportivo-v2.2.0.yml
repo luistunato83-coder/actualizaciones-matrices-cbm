@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.2.0
+name: TEMP Build SISTEMA DEPORTIVO v2.2.1
 
 on:
   pull_request:
@@ -22,16 +22,53 @@ jobs:
           if ($parts.Count -ne 5) { throw "Paquete principal v2.2.0 incompleto" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes("v220_patch.tar.xz", [Convert]::FromBase64String($b64))
-          New-Item -ItemType Directory -Path "app-v220" -Force | Out-Null
-          python -c "import tarfile; tarfile.open('v220_patch.tar.xz','r:xz').extractall('app-v220')"
-          New-Item -ItemType Directory -Path "app-v220/src" -Force | Out-Null
-          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/security.js" "app-v220/src/security.js" -Force
-          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/admin-bootstrap.json" "app-v220/src/admin-bootstrap.json" -Force
-          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/index.html" "app-v220/src/index.html" -Force
-          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/styles.css" "app-v220/src/styles.css" -Force
-          if (!(Test-Path "app-v220/package.json")) { throw "No se pudo reconstruir package.json" }
-          if (!(Test-Path "app-v220/src/main.js")) { throw "No se pudo reconstruir main.js" }
-          Write-Host "Fuente v2.2.0 reconstruida correctamente"
+          New-Item -ItemType Directory -Path "app-v221" -Force | Out-Null
+          python -c "import tarfile; tarfile.open('v220_patch.tar.xz','r:xz').extractall('app-v221')"
+          New-Item -ItemType Directory -Path "app-v221/src" -Force | Out-Null
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/security.js" "app-v221/src/security.js" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/admin-bootstrap.json" "app-v221/src/admin-bootstrap.json" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/index.html" "app-v221/src/index.html" -Force
+          Copy-Item "build-sistema-deportivo-v2.1.0/static-v2.2.0/styles.css" "app-v221/src/styles.css" -Force
+          if (!(Test-Path "app-v221/package.json")) { throw "No se pudo reconstruir package.json" }
+          if (!(Test-Path "app-v221/src/main.js")) { throw "No se pudo reconstruir main.js" }
+
+      - name: Apply v2.2.1 local-data and license behavior fix
+        shell: pwsh
+        run: |
+          $mainPath = "app-v221/src/main.js"
+          $main = Get-Content $mainPath -Raw
+
+          # Las funciones normales del usuario final no dependen de una licencia activa.
+          $main = $main.Replace("requireLicensed();", "")
+
+          # Abrir correctamente la carpeta que contiene archivos de respaldo/exportación.
+          $main = $main.Replace("ipcMain.handle('file:openPath',(_e,p)=>shell.showItemInFolder(p));", "ipcMain.handle('file:openPath',(_e,p)=>{if(!p||!fs.existsSync(p))return 'Ruta no encontrada';return fs.statSync(p).isDirectory()?shell.openPath(p):(shell.showItemInFolder(p),'')});")
+
+          # Importar también la hoja DIRECTIVA cuando exista.
+          $main = $main.Replace("wp=wb.getWorksheet('JUGADORES'),wr=wb.getWorksheet('ARBITROS')", "wp=wb.getWorksheet('JUGADORES'),wd=wb.getWorksheet('DIRECTIVA'),wr=wb.getWorksheet('ARBITROS')")
+          $needle = "names.set(name,t.id)});if(wp)"
+          $insert = "names.set(name,t.id)});if(wd)wd.eachRow((row,n)=>{if(n===1)return;const team=String(row.getCell(1).value||'').trim(),tid=names.get(team)||D().teams.find(x=>x.name===team)?.id,t=byId(D().teams,tid);if(!t)return;t.president=String(row.getCell(2).value||t.president||'');t.vicepresident=String(row.getCell(3).value||t.vicepresident||'');t.secretary=String(row.getCell(4).value||t.secretary||'');t.treasurer=String(row.getCell(5).value||t.treasurer||'');t.delegate=String(row.getCell(6).value||t.delegate||'');t.coach=String(row.getCell(7).value||t.coach||'');t.phone=String(row.getCell(8).value||t.phone||'')});if(wp)"
+          if (!$main.Contains($needle)) { throw "No se encontró el punto de inserción DIRECTIVA" }
+          $main = $main.Replace($needle, $insert)
+          Set-Content $mainPath $main -Encoding UTF8
+
+          $rendererPath = "app-v221/src/renderer.js"
+          $renderer = Get-Content $rendererPath -Raw
+          $old = @'
+$('#import').onclick=async()=>{await api.importExcel();alert('Datos importados.')};$('#backupExcel').onclick=async()=>api.openPath(await api.backupExcel());$('#backupFull').onclick=async()=>api.openPath(await api.backupJson());$('#restore').onclick=async()=>{const r=await api.restoreJson();if(r.ok)alert('Respaldo restaurado. Cierre y vuelva a abrir el sistema.')};if(session.mode==='admin')$('#update').onclick=async()=>{const r=await api.importUpdate();if(r.ok)alert('Actualización importada: '+r.file)}
+'@
+          $new = @'
+const run=async(fn)=>{try{return await fn()}catch(e){alert('No se pudo completar la operación:\n'+(e?.message||e));return null}};$('#import').onclick=async()=>run(async()=>{const r=await api.importExcel();if(!r||r.canceled)return;alert('Datos importados correctamente.');await refreshState()});$('#backupExcel').onclick=async()=>run(async()=>{const p=await api.backupExcel();if(!p)return;await api.openPath(p);alert('Respaldo Excel creado en Descargas.');});$('#backupFull').onclick=async()=>run(async()=>{const p=await api.backupJson();if(!p)return;await api.openPath(p);alert('Respaldo completo creado en Descargas.');});$('#restore').onclick=async()=>run(async()=>{const r=await api.restoreJson();if(!r||r.canceled)return;if(r.ok)alert('Respaldo restaurado correctamente. Cierre y vuelva a abrir el sistema para aplicar todos los datos.');});if(session.mode==='admin')$('#update').onclick=async()=>run(async()=>{const r=await api.importUpdate();if(r.ok)alert('Actualización importada: '+r.file)})
+'@
+          if (!$renderer.Contains($old.Trim())) { throw "No se encontró el bloque de botones de Datos y respaldos" }
+          $renderer = $renderer.Replace($old.Trim(), $new.Trim())
+          Set-Content $rendererPath $renderer -Encoding UTF8
+
+          $pkgPath = "app-v221/package.json"
+          $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
+          $pkg.version = "2.2.1"
+          $pkg.description = "SISTEMA DEPORTIVO v2.2.1 offline para gestión de campeonatos de Fútbol 7, con funciones locales operativas sin licencia y Administrador propietario protegido."
+          $pkg | ConvertTo-Json -Depth 20 | Set-Content $pkgPath -Encoding UTF8
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,7 +76,7 @@ jobs:
           node-version: '22'
 
       - name: Syntax check
-        working-directory: app-v220
+        working-directory: app-v221
         shell: pwsh
         run: |
           node --check src/main.js
@@ -49,23 +86,23 @@ jobs:
           node --check src/security.js
 
       - name: Install dependencies
-        working-directory: app-v220
+        working-directory: app-v221
         run: npm install
 
       - name: Build protected installer and portable
-        working-directory: app-v220
+        working-directory: app-v221
         run: npm run dist:protected
 
       - name: Verify executables
         shell: pwsh
         run: |
-          $files = Get-ChildItem "app-v220/dist-protected/*.exe"
+          $files = Get-ChildItem "app-v221/dist-protected/*.exe"
           if ($files.Count -lt 2) { throw "No se generaron ambos ejecutables" }
           $files | ForEach-Object { Write-Host $_.Name $_.Length }
 
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.2.0_PROTEGIDO
-          path: app-v220/dist-protected/*.exe
+          name: SISTEMA_DEPORTIVO_Windows_v2.2.1_PROTEGIDO
+          path: app-v221/dist-protected/*.exe
           if-no-files-found: error
