@@ -37,14 +37,8 @@ jobs:
         run: |
           $mainPath = "app-v221/src/main.js"
           $main = Get-Content $mainPath -Raw
-
-          # Las funciones normales del usuario final no dependen de una licencia activa.
           $main = $main.Replace("requireLicensed();", "")
-
-          # Abrir correctamente la carpeta que contiene archivos de respaldo/exportación.
           $main = $main.Replace("ipcMain.handle('file:openPath',(_e,p)=>shell.showItemInFolder(p));", "ipcMain.handle('file:openPath',(_e,p)=>{if(!p||!fs.existsSync(p))return 'Ruta no encontrada';return fs.statSync(p).isDirectory()?shell.openPath(p):(shell.showItemInFolder(p),'')});")
-
-          # Importar también la hoja DIRECTIVA cuando exista.
           $main = $main.Replace("wp=wb.getWorksheet('JUGADORES'),wr=wb.getWorksheet('ARBITROS')", "wp=wb.getWorksheet('JUGADORES'),wd=wb.getWorksheet('DIRECTIVA'),wr=wb.getWorksheet('ARBITROS')")
           $needle = "names.set(name,t.id)});if(wp)"
           $insert = "names.set(name,t.id)});if(wd)wd.eachRow((row,n)=>{if(n===1)return;const team=String(row.getCell(1).value||'').trim(),tid=names.get(team)||D().teams.find(x=>x.name===team)?.id,t=byId(D().teams,tid);if(!t)return;t.president=String(row.getCell(2).value||t.president||'');t.vicepresident=String(row.getCell(3).value||t.vicepresident||'');t.secretary=String(row.getCell(4).value||t.secretary||'');t.treasurer=String(row.getCell(5).value||t.treasurer||'');t.delegate=String(row.getCell(6).value||t.delegate||'');t.coach=String(row.getCell(7).value||t.coach||'');t.phone=String(row.getCell(8).value||t.phone||'')});if(wp)"
@@ -54,14 +48,12 @@ jobs:
 
           $rendererPath = "app-v221/src/renderer.js"
           $renderer = Get-Content $rendererPath -Raw
-          $old = @'
-$('#import').onclick=async()=>{await api.importExcel();alert('Datos importados.')};$('#backupExcel').onclick=async()=>api.openPath(await api.backupExcel());$('#backupFull').onclick=async()=>api.openPath(await api.backupJson());$('#restore').onclick=async()=>{const r=await api.restoreJson();if(r.ok)alert('Respaldo restaurado. Cierre y vuelva a abrir el sistema.')};if(session.mode==='admin')$('#update').onclick=async()=>{const r=await api.importUpdate();if(r.ok)alert('Actualización importada: '+r.file)}
-'@
-          $new = @'
-const run=async(fn)=>{try{return await fn()}catch(e){alert('No se pudo completar la operación:\n'+(e?.message||e));return null}};$('#import').onclick=async()=>run(async()=>{const r=await api.importExcel();if(!r||r.canceled)return;alert('Datos importados correctamente.');await refreshState()});$('#backupExcel').onclick=async()=>run(async()=>{const p=await api.backupExcel();if(!p)return;await api.openPath(p);alert('Respaldo Excel creado en Descargas.');});$('#backupFull').onclick=async()=>run(async()=>{const p=await api.backupJson();if(!p)return;await api.openPath(p);alert('Respaldo completo creado en Descargas.');});$('#restore').onclick=async()=>run(async()=>{const r=await api.restoreJson();if(!r||r.canceled)return;if(r.ok)alert('Respaldo restaurado correctamente. Cierre y vuelva a abrir el sistema para aplicar todos los datos.');});if(session.mode==='admin')$('#update').onclick=async()=>run(async()=>{const r=await api.importUpdate();if(r.ok)alert('Actualización importada: '+r.file)})
-'@
-          if (!$renderer.Contains($old.Trim())) { throw "No se encontró el bloque de botones de Datos y respaldos" }
-          $renderer = $renderer.Replace($old.Trim(), $new.Trim())
+          $oldB64 = "JCgnI2ltcG9ydCcpLm9uY2xpY2s9YXN5bmMoKT0+e2F3YWl0IGFwaS5pbXBvcnRFeGNlbCgpO2FsZXJ0KCdEYXRvcyBpbXBvcnRhZG9zLicpfTskKCcjYmFja3VwRXhjZWwnKS5vbmNsaWNrPWFzeW5jKCk9PmFwaS5vcGVuUGF0aChhd2FpdCBhcGkuYmFja3VwRXhjZWwoKSk7JCgnI2JhY2t1cEZ1bGwnKS5vbmNsaWNrPWFzeW5jKCk9PmFwaS5vcGVuUGF0aChhd2FpdCBhcGkuYmFja3VwSnNvbigpKTskKCcjcmVzdG9yZScpLm9uY2xpY2s9YXN5bmMoKT0+e2NvbnN0IHI9YXdhaXQgYXBpLnJlc3RvcmVKc29uKCk7aWYoci5vaylhbGVydCgnUmVzcGFsZG8gcmVzdGF1cmFkby4gQ2llcnJlIHkgdnVlbHZhIGEgYWJyaXIgZWwgc2lzdGVtYS4nKX07aWYoc2Vzc2lvbi5tb2RlPT09J2FkbWluJykkKCcjdXBkYXRlJykub25jbGljaz1hc3luYygpPT57Y29uc3Qgcj1hd2FpdCBhcGkuaW1wb3J0VXBkYXRlKCk7aWYoci5vaylhbGVydCgnQWN0dWFsaXphY2nDs24gaW1wb3J0YWRhOiAnK3IuZmlsZSl9"
+          $newB64 = "Y29uc3QgcnVuPWFzeW5jKGZuKT0+e3RyeXtyZXR1cm4gYXdhaXQgZm4oKX1jYXRjaChlKXthbGVydCgnTm8gc2UgcHVkbyBjb21wbGV0YXIgbGEgb3BlcmFjacOzbjpcbicrKGU/Lm1lc3NhZ2V8fGUpKTtyZXR1cm4gbnVsbH19OyQoJyNpbXBvcnQnKS5vbmNsaWNrPWFzeW5jKCk9PnJ1bihhc3luYygpPT57Y29uc3Qgcj1hd2FpdCBhcGkuaW1wb3J0RXhjZWwoKTtpZighcnx8ci5jYW5jZWxlZClyZXR1cm47YWxlcnQoJ0RhdG9zIGltcG9ydGFkb3MgY29ycmVjdGFtZW50ZS4nKTthd2FpdCByZWZyZXNoU3RhdGUoKX0pOyQoJyNiYWNrdXBFeGNlbCcpLm9uY2xpY2s9YXN5bmMoKT0+cnVuKGFzeW5jKCk9Pntjb25zdCBwPWF3YWl0IGFwaS5iYWNrdXBFeGNlbCgpO2lmKCFwKXJldHVybjthd2FpdCBhcGkub3BlblBhdGgocCk7YWxlcnQoJ1Jlc3BhbGRvIEV4Y2VsIGNyZWFkbyBlbiBEZXNjYXJnYXMuJyk7fSk7JCgnI2JhY2t1cEZ1bGwnKS5vbmNsaWNrPWFzeW5jKCk9PnJ1bihhc3luYygpPT57Y29uc3QgcD1hd2FpdCBhcGkuYmFja3VwSnNvbigpO2lmKCFwKXJldHVybjthd2FpdCBhcGkub3BlblBhdGgocCk7YWxlcnQoJ1Jlc3BhbGRvIGNvbXBsZXRvIGNyZWFkbyBlbiBEZXNjYXJnYXMuJyk7fSk7JCgnI3Jlc3RvcmUnKS5vbmNsaWNrPWFzeW5jKCk9PnJ1bihhc3luYygpPT57Y29uc3Qgcj1hd2FpdCBhcGkucmVzdG9yZUpzb24oKTtpZighcnx8ci5jYW5jZWxlZClyZXR1cm47aWYoci5vaylhbGVydCgnUmVzcGFsZG8gcmVzdGF1cmFkbyBjb3JyZWN0YW1lbnRlLiBDaWVycmUgeSB2dWVsdmEgYSBhYnJpciBlbCBzaXN0ZW1hIHBhcmEgYXBsaWNhciB0b2RvcyBsb3MgZGF0b3MuJyk7fSk7aWYoc2Vzc2lvbi5tb2RlPT09J2FkbWluJykkKCcjdXBkYXRlJykub25jbGljaz1hc3luYygpPT5ydW4oYXN5bmMoKT0+e2NvbnN0IHI9YXdhaXQgYXBpLmltcG9ydFVwZGF0ZSgpO2lmKHIub2spYWxlcnQoJ0FjdHVhbGl6YWNpw7NuIGltcG9ydGFkYTogJytyLmZpbGUpfSk="
+          $old = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($oldB64))
+          $new = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($newB64))
+          if (!$renderer.Contains($old)) { throw "No se encontró el bloque de botones de Datos y respaldos" }
+          $renderer = $renderer.Replace($old, $new)
           Set-Content $rendererPath $renderer -Encoding UTF8
 
           $pkgPath = "app-v221/package.json"
