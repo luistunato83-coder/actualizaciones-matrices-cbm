@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.3.4
+name: TEMP Build SISTEMA DEPORTIVO v2.3.5
 
 on:
   pull_request:
@@ -48,19 +48,26 @@ jobs:
           Set-Content "apply-v233.ps1" $script -Encoding UTF8
           & ./apply-v233.ps1
 
-      - name: Apply v2.3.4 definitive Excel import fix
+      - name: Reapply v2.3.4 definitive Excel import fix
         shell: pwsh
         run: |
           $url = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/build-sistema-deportivo-v2-3-2/build-sistema-deportivo-v2.3.4/apply-v234.ps1"
           Invoke-WebRequest -UseBasicParsing $url -OutFile "apply-v234.ps1"
           & ./apply-v234.ps1
 
-      - name: Set v2.3.4 version
+      - name: Apply v2.3.5 simplified user activation
+        shell: pwsh
+        run: |
+          $url = "https://raw.githubusercontent.com/luistunato83-coder/actualizaciones-matrices-cbm/build-sistema-deportivo-v2-3-2/build-sistema-deportivo-v2.3.5/apply-v235.ps1"
+          Invoke-WebRequest -UseBasicParsing $url -OutFile "apply-v235.ps1"
+          & ./apply-v235.ps1
+
+      - name: Set v2.3.5 version
         shell: pwsh
         run: |
           $p = Get-Content "app-v234/package.json" -Raw | ConvertFrom-Json
-          $p.version = "2.3.4"
-          $p.description = "SISTEMA DEPORTIVO v2.3.4 offline con licencia obligatoria, licencias corregidas, temas Claro/Oscuro y lector Excel estable."
+          $p.version = "2.3.5"
+          $p.description = "SISTEMA DEPORTIVO v2.3.5 offline con licencia obligatoria y activación simplificada: el usuario final solo carga su archivo de licencia."
           $p | ConvertTo-Json -Depth 20 | Set-Content "app-v234/package.json" -Encoding UTF8
 
       - name: Setup Node.js
@@ -105,6 +112,14 @@ jobs:
           '@ | Set-Content test-xlsx.js -Encoding UTF8
           node test-xlsx.js
           Remove-Item test-xlsx.js -Force
+
+      - name: Verify simplified activation UI
+        working-directory: app-v234
+        shell: pwsh
+        run: |
+          $r = Get-Content "src/renderer.js" -Raw
+          if ($r.Contains('<div class="activationCode"><span>Código de dispositivo</span>')) { throw "La pantalla de usuario todavía muestra el código de dispositivo" }
+          if (!$r.Contains('sin pedirle ningún código')) { throw "No se aplicó la activación simplificada" }
 
       - name: Patch ExcelJS reader for Node 22
         shell: pwsh
@@ -168,6 +183,6 @@ jobs:
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.3.4_PROTEGIDO
+          name: SISTEMA_DEPORTIVO_Windows_v2.3.5_PROTEGIDO
           path: app-v234/dist-protected/*.exe
           if-no-files-found: error
