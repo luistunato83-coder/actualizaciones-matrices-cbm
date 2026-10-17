@@ -1,4 +1,4 @@
-name: TEMP Build SISTEMA DEPORTIVO v2.3.0
+name: TEMP Build SISTEMA DEPORTIVO v2.3.1
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout isolated build branch
         uses: actions/checkout@v4
         with:
-          ref: build-sistema-deportivo-v2-3-0
+          ref: build-sistema-deportivo-v2-3-1
 
       - name: Rebuild complete v2.3.0 source
         shell: pwsh
@@ -22,10 +22,19 @@ jobs:
           if ($parts.Count -ne 3) { throw "Paquete fuente v2.3.0 incompleto" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes("source-v2.3.0.zip", [Convert]::FromBase64String($b64))
-          New-Item -ItemType Directory -Path "app-v230" -Force | Out-Null
-          Expand-Archive -Path "source-v2.3.0.zip" -DestinationPath "app-v230" -Force
-          if (!(Test-Path "app-v230/package.json")) { throw "No se pudo reconstruir package.json" }
-          if (!(Test-Path "app-v230/src/main.js")) { throw "No se pudo reconstruir main.js" }
+          New-Item -ItemType Directory -Path "app-v231" -Force | Out-Null
+          Expand-Archive -Path "source-v2.3.0.zip" -DestinationPath "app-v231" -Force
+          if (!(Test-Path "app-v231/package.json")) { throw "No se pudo reconstruir package.json" }
+          if (!(Test-Path "app-v231/src/main.js")) { throw "No se pudo reconstruir main.js" }
+
+      - name: Apply v2.3.1 secure admin recovery patch
+        shell: pwsh
+        run: |
+          Copy-Item "build-sistema-deportivo-v2.3.1/v2.3.1.patch" "app-v231/v2.3.1.patch" -Force
+          Push-Location "app-v231"
+          git apply --check "v2.3.1.patch"
+          git apply "v2.3.1.patch"
+          Pop-Location
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,7 +42,7 @@ jobs:
           node-version: '22'
 
       - name: Syntax check
-        working-directory: app-v230
+        working-directory: app-v231
         shell: pwsh
         run: |
           node --check src/main.js
@@ -43,23 +52,23 @@ jobs:
           node --check src/security.js
 
       - name: Install dependencies
-        working-directory: app-v230
+        working-directory: app-v231
         run: npm install
 
       - name: Build protected installer and portable
-        working-directory: app-v230
+        working-directory: app-v231
         run: npm run dist:protected
 
       - name: Verify executables
         shell: pwsh
         run: |
-          $files = Get-ChildItem "app-v230/dist-protected/*.exe"
+          $files = Get-ChildItem "app-v231/dist-protected/*.exe"
           if ($files.Count -lt 2) { throw "No se generaron ambos ejecutables" }
           $files | ForEach-Object { Write-Host $_.Name $_.Length }
 
       - name: Upload installer and portable
         uses: actions/upload-artifact@v4
         with:
-          name: SISTEMA_DEPORTIVO_Windows_v2.3.0_PROTEGIDO
-          path: app-v230/dist-protected/*.exe
+          name: SISTEMA_DEPORTIVO_Windows_v2.3.1_PROTEGIDO
+          path: app-v231/dist-protected/*.exe
           if-no-files-found: error
